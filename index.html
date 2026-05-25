@@ -3,65 +3,131 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>1080p Color Spectrogram Decoder - by zepti_W on roblox</title>
+    <title>raw data pixel decoder</title>
     <style>
+        /* fade-in keyframes for a smooth entrance */
+        @keyframes fadein {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
         body {
             font-family: Arial, sans-serif;
-            background-color: #121212;
-            color: #ffffff;
+            background-color: #0b0b0b; /* slightly darker, deeper canvas background */
+            color: #a0a0a0; /* muted, low-contrast text for a chill vibe */
             text-align: center;
-            padding: 20px;
+            padding: 40px 20px;
+            margin: 0;
         }
+
+        .main-container {
+            animation: fadein 1.2s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+        }
+
+        h1 {
+            color: #ffffff;
+            font-weight: 400;
+            letter-spacing: -0.5px;
+            font-size: 1.85em;
+            margin-bottom: 5px;
+        }
+
         #canvas-container {
-            margin-top: 20px;
+            margin-top: 30px;
             display: flex;
             justify-content: center;
         }
+
         canvas {
             background-color: #000;
-            border: 2px solid #333;
-            width: 540px; /* Displayed smaller on screen for layout, but underlying pixels are 1080x1080 */
+            border: 1px solid #222; /* thinner, seamless border look */
+            width: 540px; 
             height: 540px;
+            border-radius: 4px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6); /* soft drop shadow for the image */
         }
+
         .controls {
-            margin: 20px 0;
+            margin: 30px 0;
         }
+
+        /* custom styling to hide the default ugly file picker text */
+        .file-upload-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+
         input[type="file"] {
-            background: #222;
-            padding: 10px;
-            border-radius: 5px;
-            border: 1px solid #444;
-            color: white;
-            cursor: pointer;
+            display: none; /* hidden default input */
         }
+
+        .custom-file-upload {
+            display: inline-block;
+            background: #161616;
+            padding: 12px 24px;
+            border-radius: 8px;
+            border: 1px solid #2a2a2a;
+            color: #e0e0e0;
+            cursor: pointer;
+            font-size: 0.9em;
+            letter-spacing: 0.3px;
+            transition: all 0.4s ease; /* butter-smooth animation on hover */
+        }
+
+        .custom-file-upload:hover {
+            background: #202020;
+            border-color: #00a2ff;
+            color: #ffffff;
+            box-shadow: 0 0 15px rgba(0, 162, 255, 0.2);
+        }
+
         .credits {
             color: #00a2ff;
             font-weight: bold;
             margin-top: 5px;
-            font-size: 1.1em;
+            font-size: 1.05em;
+            letter-spacing: 0.5px;
+            opacity: 0.85;
+        }
+
+        p {
+            font-size: 0.9em;
+            max-width: 500px;
+            margin: 15px auto;
+            line-height: 1.6;
         }
     </style>
 </head>
 <body>
 
-    <h1>HD Color Audio to PNG Decoder</h1>
-    <div class="credits">by zepti_W on roblox</div>
-    <p>Upload your color audio file to reconstruct the $1080 \times 1080$ PNG image.</p>
+    <div class="main-container">
+        <h1>raw audio stream to png pixel decoder</h1>
+        <div class="credits">by zepti_w on roblox</div>
+        <p>upload your raw data audio file to reconstruct the pixel array into a 1080x1080 png.</p>
 
-    <div class="controls">
-        <input type="file" id="audio-file" accept="audio/*">
-    </div>
+        <div class="controls">
+            <div class="file-upload-wrapper">
+                <label for="audio-file" class="custom-file-upload">
+                    select audio file
+                </label>
+                <input type="file" id="audio-file" accept="audio/*">
+            </div>
+        </div>
 
-    <div id="canvas-container">
-        <canvas id="spectrogram" width="1080" height="1080"></canvas>
+        <div id="canvas-container">
+            <canvas id="spectrogram" width="1080" height="1080"></canvas>
+        </div>
+        
+        <p style="color: #555; margin-top: 25px;">right-click the image above and hit "save image as" to get your clean 1080x1080 png.</p>
     </div>
-    
-    <p style="color: #888;">Right-click the image above and hit "Save Image As" to get your clean 1080x1080 PNG.</p>
 
     <script>
         document.getElementById('audio-file').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (!file) return;
+
+            // change layout text dynamically to reflect load status while staying lowercase
+            document.querySelector('.custom-file-upload').textContent = "decoding file...";
 
             const reader = new FileReader();
             reader.onload = function(event) {
@@ -74,66 +140,57 @@
             const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             try {
                 const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-                renderColorSpectrogram(audioBuffer);
+                renderRawPixels(audioBuffer);
+                document.querySelector('.custom-file-upload').textContent = "done";
             } catch (error) {
-                alert("Error decoding audio file.");
+                alert("error reading raw data audio file.");
+                document.querySelector('.custom-file-upload').textContent = "select audio file";
                 console.error(error);
             }
         }
 
-        function renderColorSpectrogram(audioBuffer) {
+        function renderRawPixels(audioBuffer) {
             const canvas = document.getElementById('spectrogram');
             const ctx = canvas.getContext('2d');
-            const rawData = audioBuffer.getChannelData(0);
             
+            const rawAudioData = audioBuffer.getChannelData(0);
             const imgData = ctx.createImageData(1080, 1080);
-            const samplesPerColumn = Math.floor(rawData.length / 1080);
-            const fftSize = 2048; // Higher FFT size for sharp 1080 color separation
-
-            for (let x = 0; x < 1080; x++) {
-                const offset = x * samplesPerColumn;
-                
-                // Extract temporary block for processing
-                const windowData = new Float32Array(fftSize);
-                for (let i = 0; i < fftSize; i++) {
-                    if (offset + i < rawData.length) {
-                        windowData[i] = rawData[offset + i];
-                    }
-                }
-
-                // Analyze frequencies row by row
-                for (let y = 0; y < 1080; y++) {
-                    // Approximate positions for our custom R, G, B frequency bands
-                    // Matches the mathematical distribution from the Python script
-                    const rSampleK = Math.floor(100 + (y / 1080) * 400);
-                    const gSampleK = Math.floor(600 + (y / 1080) * 400);
-                    const bSampleK = Math.floor(1100 + (y / 1080) * 400);
-
-                    const getMagnitude = (k) => {
-                        let real = 0, imag = 0;
-                        for (let n = 0; n < fftSize; n++) {
-                            const angle = (2 * Math.PI * k * n) / fftSize;
-                            real += windowData[n] * Math.cos(angle);
-                            imag -= windowData[n] * Math.sin(angle);
-                        }
-                        return Math.min(255, Math.sqrt(real * real + imag * imag) * 400);
-                    };
-
-                    const rIntensity = getMagnitude(rSampleK);
-                    const gIntensity = getMagnitude(gSampleK);
-                    const bIntensity = getMagnitude(bSampleK);
-
-                    // Invert vertical layout so low frequencies stay at bottom
-                    const targetY = 1079 - y;
-                    const pixelIndex = (targetY * 1080 + x) * 4;
-
-                    imgData.data[pixelIndex] = rIntensity;     // R
-                    imgData.data[pixelIndex + 1] = gIntensity; // G
-                    imgData.data[pixelIndex + 2] = bIntensity; // B
-                    imgData.data[pixelIndex + 3] = 255;        // Alpha
+            
+            let audioIdx = 0;
+            
+            for (let row = 0; row < 1080; row++) {
+                for (let col = 0; col < 1080; col++) {
+                    
+                    if (audioIdx + 2 >= rawAudioData.length) break;
+                    
+                    const r = Math.floor((rawAudioData[audioIdx] + 1.0) * 127.5);
+                    const g = Math.floor((rawAudioData[audioIdx + 1] + 1.0) * 127.5);
+                    const b = Math.floor((rawAudioData[audioIdx + 2] + 1.0) * 127.5);
+                    
+                    const canvasPixelIdx = (row * 1080 + col) * 4;
+                    
+                    imgData.data[canvasPixelIdx]     = Math.min(255, Math.max(0, r)); 
+                    imgData.data[canvasPixelIdx + 1] = Math.min(255, Math.max(0, g)); 
+                    imgData.data[canvasPixelIdx + 2] = Math.min(255, Math.max(0, b)); 
+                    imgData.data[canvasPixelIdx + 3] = 255;                           
+                    
+                    audioIdx += 3;
                 }
             }
+            
             ctx.putImageData(imgData, 0, 0);
+
+            // --- WATERMARK INJECTION CODE ---
+            ctx.save();
+            ctx.font = "bold 46px Arial";
+            ctx.fillStyle = "rgba(255, 255, 255, 0.4)"; 
+            ctx.shadowColor = "rgba(0, 0, 0, 0.7)";      
+            ctx.shadowBlur = 8;
+            ctx.textAlign = "right";
+            
+            // watermark forced lowercase on the actual output image asset
+            ctx.fillText("by zepti_w on roblox", 1050, 1040);
+            ctx.restore();
         }
     </script>
 </body>
