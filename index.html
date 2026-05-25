@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audio Spectrogram Decoder</title>
+    <title>1080p Color Spectrogram Decoder - by zepti_W on roblox</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -14,12 +14,14 @@
         }
         #canvas-container {
             margin-top: 20px;
-            overflow-x: auto;
+            display: flex;
+            justify-content: center;
         }
         canvas {
             background-color: #000;
             border: 2px solid #333;
-            max-width: 100%;
+            width: 540px; /* Displayed smaller on screen for layout, but underlying pixels are 1080x1080 */
+            height: 540px;
         }
         .controls {
             margin: 20px 0;
@@ -32,22 +34,29 @@
             color: white;
             cursor: pointer;
         }
+        .credits {
+            color: #00a2ff;
+            font-weight: bold;
+            margin-top: 5px;
+            font-size: 1.1em;
+        }
     </style>
 </head>
 <body>
 
-    <h1>Audio to PNG Spectrogram Decoder</h1>
-    <p>Upload your audio file (WAV/MP3) to visually extract the hidden image pixels.</p>
+    <h1>HD Color Audio to PNG Decoder</h1>
+    <div class="credits">by zepti_W on roblox</div>
+    <p>Upload your color audio file to reconstruct the $1080 \times 1080$ PNG image.</p>
 
     <div class="controls">
         <input type="file" id="audio-file" accept="audio/*">
     </div>
 
     <div id="canvas-container">
-        <canvas id="spectrogram"></canvas>
+        <canvas id="spectrogram" width="1080" height="1080"></canvas>
     </div>
     
-    <p style="color: #888;">Right-click the image above to save it as a PNG once rendering finishes.</p>
+    <p style="color: #888;">Right-click the image above and hit "Save Image As" to get your clean 1080x1080 PNG.</p>
 
     <script>
         document.getElementById('audio-file').addEventListener('change', function(e) {
@@ -56,86 +65,74 @@
 
             const reader = new FileReader();
             reader.onload = function(event) {
-                const arrayBuffer = event.target.result;
-                decodeAudio(arrayBuffer);
+                decodeAudio(event.target.result);
             };
             reader.readAsArrayBuffer(file);
         });
 
         async function decodeAudio(arrayBuffer) {
-            // Create offline audio context to process audio faster than real-time
             const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            
             try {
                 const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-                renderSpectrogram(audioBuffer);
+                renderColorSpectrogram(audioBuffer);
             } catch (error) {
-                alert("Error decoding audio file. Make sure it's a valid audio format.");
+                alert("Error decoding audio file.");
                 console.error(error);
             }
         }
 
-        function renderSpectrogram(audioBuffer) {
+        function renderColorSpectrogram(audioBuffer) {
             const canvas = document.getElementById('spectrogram');
             const ctx = canvas.getContext('2d');
-
-            // Set up processing sizes
-            const fftSize = 1024; // Controls vertical resolution
-            const sampleRate = audioBuffer.sampleRate;
-            const rawData = audioBuffer.getChannelData(0); // Use the first audio channel
+            const rawData = audioBuffer.getChannelData(0);
             
-            // Adjust canvas size based on audio length
-            const hopSize = 256; // How many samples to skip per vertical pixel column
-            const numColumns = Math.floor(rawData.length / hopSize);
-            
-            canvas.width = numColumns;
-            canvas.height = fftSize / 2; // Only use positive frequencies
+            const imgData = ctx.createImageData(1080, 1080);
+            const samplesPerColumn = Math.floor(rawData.length / 1080);
+            const fftSize = 2048; // Higher FFT size for sharp 1080 color separation
 
-            const imgData = ctx.createImageData(canvas.width, canvas.height);
-
-            // Simple Fast Fourier Transform (FFT) implementation in JS for static analysis
-            // To keep it lightweight and fast, we simulate a basic DFT windowing for visualization
-            for (let x = 0; x < numColumns; x++) {
-                const offset = x * hopSize;
+            for (let x = 0; x < 1080; x++) {
+                const offset = x * samplesPerColumn;
                 
-                // Get a window of data
+                // Extract temporary block for processing
                 const windowData = new Float32Array(fftSize);
                 for (let i = 0; i < fftSize; i++) {
                     if (offset + i < rawData.length) {
-                        // Apply Hanning window to smooth edges
-                        const hanning = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (fftSize - 1)));
-                        windowData[i] = rawData[offset + i] * hanning;
+                        windowData[i] = rawData[offset + i];
                     }
                 }
 
-                // Calculate magnitudes (Real & Imaginary)
-                for (let k = 0; k < fftSize / 2; k++) {
-                    let real = 0;
-                    let imag = 0;
-                    for (let n = 0; n < fftSize; n++) {
-                        const angle = (2 * Math.PI * k * n) / fftSize;
-                        real += windowData[n] * Math.cos(angle);
-                        imag -= windowData[n] * Math.sin(angle);
-                    }
-                    
-                    const magnitude = Math.sqrt(real * real + imag * imag);
-                    // Boost contrast logarithmically
-                    let intensity = Math.log10(1 + magnitude * 10) * 255; 
-                    intensity = Math.min(255, Math.max(0, intensity));
+                // Analyze frequencies row by row
+                for (let y = 0; y < 1080; y++) {
+                    // Approximate positions for our custom R, G, B frequency bands
+                    // Matches the mathematical distribution from the Python script
+                    const rSampleK = Math.floor(100 + (y / 1080) * 400);
+                    const gSampleK = Math.floor(600 + (y / 1080) * 400);
+                    const bSampleK = Math.floor(1100 + (y / 1080) * 400);
 
-                    // Invert Y-axis so low frequencies are at the bottom, high at top
-                    const y = (fftSize / 2) - 1 - k;
-                    const pixelIndex = (y * canvas.width + x) * 4;
+                    const getMagnitude = (k) => {
+                        let real = 0, imag = 0;
+                        for (let n = 0; n < fftSize; n++) {
+                            const angle = (2 * Math.PI * k * n) / fftSize;
+                            real += windowData[n] * Math.cos(angle);
+                            imag -= windowData[n] * Math.sin(angle);
+                        }
+                        return Math.min(255, Math.sqrt(real * real + imag * imag) * 400);
+                    };
 
-                    // Write Grayscale pixels (R, G, B identical, A is solid)
-                    imgData.data[pixelIndex] = intensity;     // Red
-                    imgData.data[pixelIndex + 1] = intensity; // Green
-                    imgData.data[pixelIndex + 2] = intensity; // Blue
-                    imgData.data[pixelIndex + 3] = 255;       // Alpha (Opaque)
+                    const rIntensity = getMagnitude(rSampleK);
+                    const gIntensity = getMagnitude(gSampleK);
+                    const bIntensity = getMagnitude(bSampleK);
+
+                    // Invert vertical layout so low frequencies stay at bottom
+                    const targetY = 1079 - y;
+                    const pixelIndex = (targetY * 1080 + x) * 4;
+
+                    imgData.data[pixelIndex] = rIntensity;     // R
+                    imgData.data[pixelIndex + 1] = gIntensity; // G
+                    imgData.data[pixelIndex + 2] = bIntensity; // B
+                    imgData.data[pixelIndex + 3] = 255;        // Alpha
                 }
             }
-
-            // Draw data onto the canvas
             ctx.putImageData(imgData, 0, 0);
         }
     </script>
