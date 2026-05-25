@@ -179,18 +179,6 @@
             }
             
             ctx.putImageData(imgData, 0, 0);
-
-            // --- WATERMARK INJECTION CODE ---
-            ctx.save();
-            ctx.font = "bold 46px Arial";
-            ctx.fillStyle = "rgba(255, 255, 255, 0.4)"; 
-            ctx.shadowColor = "rgba(0, 0, 0, 0.7)";      
-            ctx.shadowBlur = 8;
-            ctx.textAlign = "right";
-            
-            // watermark forced lowercase on the actual output image asset
-            ctx.fillText("by zepti_w on roblox", 1050, 1040);
-            ctx.restore();
         }
     </script>
 </body>
