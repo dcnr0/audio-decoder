@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Spectrogram Decoder</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            text-align: center;
+            padding: 20px;
+        }
+        #canvas-container {
+            margin-top: 20px;
+            overflow-x: auto;
+        }
+        canvas {
+            background-color: #000;
+            border: 2px solid #333;
+            max-width: 100%;
+        }
+        .controls {
+            margin: 20px 0;
+        }
+        input[type="file"] {
+            background: #222;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #444;
+            color: white;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Audio to PNG Spectrogram Decoder</h1>
+    <p>Upload your audio file (WAV/MP3) to visually extract the hidden image pixels.</p>
+
+    <div class="controls">
+        <input type="file" id="audio-file" accept="audio/*">
+    </div>
+
+    <div id="canvas-container">
+        <canvas id="spectrogram"></canvas>
+    </div>
+    
+    <p style="color: #888;">Right-click the image above to save it as a PNG once rendering finishes.</p>
+
+    <script>
+        document.getElementById('audio-file').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const arrayBuffer = event.target.result;
+                decodeAudio(arrayBuffer);
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        async function decodeAudio(arrayBuffer) {
+            // Create offline audio context to process audio faster than real-time
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            
+            try {
+                const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+                renderSpectrogram(audioBuffer);
+            } catch (error) {
+                alert("Error decoding audio file. Make sure it's a valid audio format.");
+                console.error(error);
+            }
+        }
+
+        function renderSpectrogram(audioBuffer) {
+            const canvas = document.getElementById('spectrogram');
+            const ctx = canvas.getContext('2d');
+
+            // Set up processing sizes
+            const fftSize = 1024; // Controls vertical resolution
+            const sampleRate = audioBuffer.sampleRate;
+            const rawData = audioBuffer.getChannelData(0); // Use the first audio channel
+            
+            // Adjust canvas size based on audio length
+            const hopSize = 256; // How many samples to skip per vertical pixel column
+            const numColumns = Math.floor(rawData.length / hopSize);
+            
+            canvas.width = numColumns;
+            canvas.height = fftSize / 2; // Only use positive frequencies
+
+            const imgData = ctx.createImageData(canvas.width, canvas.height);
+
+            // Simple Fast Fourier Transform (FFT) implementation in JS for static analysis
+            // To keep it lightweight and fast, we simulate a basic DFT windowing for visualization
+            for (let x = 0; x < numColumns; x++) {
+                const offset = x * hopSize;
+                
+                // Get a window of data
+                const windowData = new Float32Array(fftSize);
+                for (let i = 0; i < fftSize; i++) {
+                    if (offset + i < rawData.length) {
+                        // Apply Hanning window to smooth edges
+                        const hanning = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (fftSize - 1)));
+                        windowData[i] = rawData[offset + i] * hanning;
+                    }
+                }
+
+                // Calculate magnitudes (Real & Imaginary)
+                for (let k = 0; k < fftSize / 2; k++) {
+                    let real = 0;
+                    let imag = 0;
+                    for (let n = 0; n < fftSize; n++) {
+                        const angle = (2 * Math.PI * k * n) / fftSize;
+                        real += windowData[n] * Math.cos(angle);
+                        imag -= windowData[n] * Math.sin(angle);
+                    }
+                    
+                    const magnitude = Math.sqrt(real * real + imag * imag);
+                    // Boost contrast logarithmically
+                    let intensity = Math.log10(1 + magnitude * 10) * 255; 
+                    intensity = Math.min(255, Math.max(0, intensity));
+
+                    // Invert Y-axis so low frequencies are at the bottom, high at top
+                    const y = (fftSize / 2) - 1 - k;
+                    const pixelIndex = (y * canvas.width + x) * 4;
+
+                    // Write Grayscale pixels (R, G, B identical, A is solid)
+                    imgData.data[pixelIndex] = intensity;     // Red
+                    imgData.data[pixelIndex + 1] = intensity; // Green
+                    imgData.data[pixelIndex + 2] = intensity; // Blue
+                    imgData.data[pixelIndex + 3] = 255;       // Alpha (Opaque)
+                }
+            }
+
+            // Draw data onto the canvas
+            ctx.putImageData(imgData, 0, 0);
+        }
+    </script>
+</body>
+</html>
